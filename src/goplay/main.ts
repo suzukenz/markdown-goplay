@@ -1,4 +1,8 @@
+import * as os from "os";
 import * as vscode from "vscode";
+import * as fs from "fs";
+import { execSync } from "child_process";
+import path from "path";
 
 class NotFoundCodeSectionError extends Error {}
 
@@ -29,6 +33,22 @@ const getEndPosition = (
 };
 
 export class MarkdownGoplay {
+  #outputChannnel: vscode.OutputChannel;
+
+  constructor() {
+    this.#outputChannnel = vscode.window.createOutputChannel("markdown-goplay");
+  }
+
+  #getWorkdir = (editor: vscode.TextEditor): string => {
+    const conf = vscode.workspace.getConfiguration("markdownGoplay");
+    const workdir = conf.get<string>("workdir");
+    if (workdir) {
+      return workdir;
+    }
+    let fileDir = path.dirname(editor.document.uri.fsPath);
+    return fileDir;
+  };
+
   #detectSource = (editor: vscode.TextEditor): [string, number] => {
     // カーソルの行数
     const cursorLine = editor.selection.active.line;
@@ -42,6 +62,31 @@ export class MarkdownGoplay {
     return [code, end.line + 1];
   };
 
+  #runGoCode = (code: string, cwd: string): string => {
+    this.#outputChannnel.clear();
+
+    const codePath = path.join(os.tmpdir(), "main.go");
+    fs.writeFileSync(codePath, code);
+    const cmd = "go run " + codePath;
+
+    // パネルの出力タブに実行コマンドを書き出す
+    this.#outputChannnel.appendLine(cmd);
+
+    try {
+      const buf = execSync(cmd, { cwd });
+
+      const stdout = buf.toString();
+      this.#outputChannnel.append(stdout);
+      return stdout;
+    } catch (e) {
+      // 異常終了
+      // エラー出力をパネルの出力タブに書き出して、表示する
+      this.#outputChannnel.append(e.stderr.toString());
+      this.#outputChannnel.show();
+      throw e;
+    }
+  };
+
   public run = () => {
     if (!vscode.window.activeTextEditor) {
       // アクティブなテキストエディターがない場合実行しない。
@@ -51,7 +96,9 @@ export class MarkdownGoplay {
     try {
       const editor = vscode.window.activeTextEditor;
       const [code, endLine] = this.#detectSource(editor);
-      console.log(code, endLine);
+      const cwd = this.#getWorkdir(editor);
+      const output = this.#runGoCode(code, cwd);
+      console.log(output);
     } catch (e) {
       if (e instanceof NotFoundCodeSectionError) {
         vscode.window.showErrorMessage("Not found go code section.");
