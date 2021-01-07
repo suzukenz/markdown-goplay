@@ -98,7 +98,7 @@ export class MarkdownGoplay {
       const [code, endLine] = this.#detectSource(editor);
       const cwd = this.#getWorkdir(editor);
       const output = this.#runGoCode(code, cwd);
-      console.log(output);
+      appendMDText(editor, endLine, output);
     } catch (e) {
       if (e instanceof NotFoundCodeSectionError) {
         vscode.window.showErrorMessage("Not found go code section.");
@@ -106,3 +106,15 @@ export class MarkdownGoplay {
     }
   };
 }
+
+const appendMDText = (
+  editor: vscode.TextEditor,
+  targetLine: number,
+  text: string
+): void => {
+  const eol = editor.document.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n";
+  const outputText = eol + "```" + `${eol}${text}${eol}` + "```" + eol;
+  editor.edit((editBuilder) => {
+    editBuilder.insert(new vscode.Position(targetLine, 0), outputText);
+  });
+};

@@ -11,3 +11,8 @@ func main() {
 	fmt.Println("Hello, 世界")
 }
 ```
+
+```
+Hello, 世界
+
+```
